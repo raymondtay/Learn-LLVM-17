@@ -250,7 +250,8 @@ void Sema::actOnReturnStatement(StmtList &Stmts, SMLoc Loc,
   if (Proc->getRetType() && !RetVal)
     Diags.report(Loc, diag::err_function_requires_return);
   else if (!Proc->getRetType() && RetVal)
-    Diags.report(Loc, diag::err_procedure_requires_empty_return);
+    Diags.report(Loc,
+                 diag::err_procedure_requires_empty_return);
   else if (Proc->getRetType() && RetVal) {
     if (Proc->getRetType() != RetVal->getType())
       Diags.report(Loc, diag::err_function_and_return_type);
@@ -370,7 +371,7 @@ Expr *Sema::actOnPrefixExpression(Expr *E,
 Expr *Sema::actOnIntegerLiteral(SMLoc Loc,
                                 StringRef Literal) {
   uint8_t Radix = 10;
-  if (Literal.endswith("H")) {
+  if (Literal.ends_with("H")) {
     Literal = Literal.drop_back();
     Radix = 16;
   }
@@ -384,7 +385,8 @@ Expr *Sema::actOnVariable(Decl *D) {
     return nullptr;
   if (auto *V = dyn_cast<VariableDeclaration>(D))
     return new VariableAccess(V);
-  else if (auto *P = dyn_cast<FormalParameterDeclaration>(D))
+  else if (auto *P =
+               dyn_cast<FormalParameterDeclaration>(D))
     return new VariableAccess(P);
   else if (auto *C = dyn_cast<ConstantDeclaration>(D)) {
     if (C == TrueConst)

@@ -2,6 +2,7 @@
 #include "llvm/ADT/StringMap.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
 
 using namespace llvm;
@@ -19,7 +20,8 @@ class ToIRVisitor : public ASTVisitor {
   StringMap<Value *> nameMap;
 
 public:
-  ToIRVisitor(Module *M) : M(M), Builder(M->getContext()) {
+  ToIRVisitor(Module *M)
+      : M(M), Builder(M->getContext()) {
     VoidTy = Type::getVoidTy(M->getContext());
     Int32Ty = Type::getInt32Ty(M->getContext());
     PtrTy = PointerType::getUnqual(M->getContext());
@@ -30,9 +32,10 @@ public:
     FunctionType *MainFty = FunctionType::get(
         Int32Ty, {Int32Ty, PtrTy}, false);
     Function *MainFn = Function::Create(
-        MainFty, GlobalValue::ExternalLinkage, "main", M);
-    BasicBlock *BB = BasicBlock::Create(M->getContext(),
-                                        "entry", MainFn);
+        MainFty, GlobalValue::ExternalLinkage, "main",
+        M);
+    BasicBlock *BB = BasicBlock::Create(
+        M->getContext(), "entry", MainFn);
     Builder.SetInsertPoint(BB);
 
     Tree->accept(*this);
@@ -82,8 +85,8 @@ public:
     FunctionType *ReadFty =
         FunctionType::get(Int32Ty, {PtrTy}, false);
     Function *ReadFn = Function::Create(
-        ReadFty, GlobalValue::ExternalLinkage, "calc_read",
-        M);
+        ReadFty, GlobalValue::ExternalLinkage,
+        "calc_read", M);
     for (auto I = Node.begin(), E = Node.end(); I != E;
          ++I) {
       StringRef Var = *I;
@@ -93,8 +96,9 @@ public:
           M->getContext(), Var);
       GlobalVariable *Str = new GlobalVariable(
           *M, StrText->getType(),
-          /*isConstant=*/true, GlobalValue::PrivateLinkage,
-          StrText, Twine(Var).concat(".str"));
+          /*isConstant=*/true,
+          GlobalValue::PrivateLinkage, StrText,
+          Twine(Var).concat(".str"));
       CallInst *Call =
           Builder.CreateCall(ReadFty, ReadFn, {Str});
 
