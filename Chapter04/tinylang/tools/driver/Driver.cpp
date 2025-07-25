@@ -5,6 +5,7 @@
 #include "llvm/CodeGen/CommandFlags.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/Module.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/CommandLine.h"
@@ -14,6 +15,7 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/WithColor.h"
+#include "llvm/Target/TargetMachine.h"
 #include "llvm/TargetParser/Host.h"
 
 using namespace llvm;
@@ -27,8 +29,7 @@ static llvm::cl::opt<std::string>
               cl::init("-"));
 
 static llvm::cl::opt<std::string>
-    OutputFilename("o",
-                   llvm::cl::desc("Output filename"),
+    OutputFilename("o", llvm::cl::desc("Output filename"),
                    llvm::cl::value_desc("filename"));
 
 static llvm::cl::opt<std::string> MTriple(
@@ -92,19 +93,18 @@ bool emit(StringRef Argv0, llvm::Module *M,
     if (InputFilename == "-") {
       OutputFilename = "-";
     } else {
-      if (InputFilename.endswith(".mod"))
-        OutputFilename =
-            InputFilename.drop_back(4).str();
+      if (InputFilename.ends_with(".mod"))
+        OutputFilename = InputFilename.drop_back(4).str();
       else
         OutputFilename = InputFilename.str();
       switch (FileType) {
-      case CGFT_AssemblyFile:
+      case llvm::CodeGenFileType::AssemblyFile:
         OutputFilename.append(EmitLLVM ? ".ll" : ".s");
         break;
-      case CGFT_ObjectFile:
+      case llvm::CodeGenFileType::ObjectFile:
         OutputFilename.append(".o");
         break;
-      case CGFT_Null:
+      default:
         OutputFilename.append(".null");
         break;
       }
@@ -114,7 +114,7 @@ bool emit(StringRef Argv0, llvm::Module *M,
   // Open the file.
   std::error_code EC;
   sys::fs::OpenFlags OpenFlags = sys::fs::OF_None;
-  if (FileType == CGFT_AssemblyFile)
+  if (FileType == llvm::CodeGenFileType::AssemblyFile)
     OpenFlags |= sys::fs::OF_TextWithCRLF;
   auto Out = std::make_unique<llvm::ToolOutputFile>(
       OutputFilename, EC, OpenFlags);
@@ -125,7 +125,8 @@ bool emit(StringRef Argv0, llvm::Module *M,
   }
 
   legacy::PassManager PM;
-  if (FileType == CGFT_AssemblyFile && EmitLLVM) {
+  if (FileType == llvm::CodeGenFileType::AssemblyFile &&
+      EmitLLVM) {
     PM.add(createPrintModulePass(Out->os()));
   } else {
     if (TM->addPassesToEmitFile(PM, Out->os(), nullptr,
