@@ -1,4 +1,8 @@
     CompileFlags:
       Add:
         - -I/usr/local/opt/llvm/include
+        - -I/Users/raymondtay/Projects/Learn-LLVM-17/Chapter03/tinylang/include
+        - -I/Users/raymondtay/Projects/Learn-LLVM-17/Chapter04/tinylang/include
+        - -I/Users/raymondtay/Projects/Learn-LLVM-17/Chapter05/tinylang/include
+
 
