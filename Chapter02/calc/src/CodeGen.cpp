@@ -34,6 +34,10 @@ public:
     Function *MainFn = Function::Create(
         MainFty, GlobalValue::ExternalLinkage, "main",
         M);
+    // For each function a FunctionType instance must be
+    // created. In C++ parlance, it is a function
+    // prototype. Finally, the basicblock is attached to
+    // the IR builder.
     BasicBlock *BB = BasicBlock::Create(
         M->getContext(), "entry", MainFn);
     Builder.SetInsertPoint(BB);
@@ -81,6 +85,9 @@ public:
     }
   };
 
+  // In the calc language, the "with" declaration would
+  // carry the payload of the various variables
+  // discovered during the lexical parsing process.
   virtual void visit(WithDecl &Node) override {
     FunctionType *ReadFty =
         FunctionType::get(Int32Ty, {PtrTy}, false);
@@ -110,6 +117,8 @@ public:
 };
 } // namespace
 
+// The generated IR would be dumped to the console,
+// eventually.
 void CodeGen::compile(AST *Tree) {
   LLVMContext Ctx;
   Module *M = new Module("calc.expr", Ctx);

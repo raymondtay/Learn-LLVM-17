@@ -5,12 +5,16 @@
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/raw_ostream.h"
 
+// LLVM comes with its own system for declaring
+// command-line options. You only need to declare a
+// static variable for each option you need.
 static llvm::cl::opt<std::string>
     Input(llvm::cl::Positional,
           llvm::cl::desc("<input expression>"),
           llvm::cl::init(""));
 
 int main(int argc, const char **argv) {
+  // initialized the LLVM libraries
   llvm::InitLLVM X(argc, argv);
   llvm::cl::ParseCommandLineOptions(
       argc, argv, "calc - the expression compiler\n");
