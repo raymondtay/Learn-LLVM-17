@@ -67,6 +67,7 @@ llvm::Value *CGProcedure::addPhiOperands(
   for (auto *PredBB : llvm::predecessors(BB))
     Phi->addIncoming(readLocalVariable(PredBB, Decl),
                      PredBB);
+  // return Phi;
   return optimizePhi(Phi);
 }
 
@@ -367,6 +368,9 @@ void CGProcedure::emitStmt(WhileStatement *Stmt) {
   sealBlock(Curr);
   setCurr(WhileCondBB);
   llvm::Value *Cond = emitExpr(Stmt->getCond());
+  //
+  // CreateCondBr(Condition..., ThenBB..., ElseBB...)
+  // if Condition is True then ThenBB else ElseBB
   Builder.CreateCondBr(Cond, WhileBodyBB, AfterWhileBB);
 
   setCurr(WhileBodyBB);
