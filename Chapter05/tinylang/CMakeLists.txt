@@ -5,7 +5,17 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 
   find_package(LLVM REQUIRED HINTS "${LLVM_CMAKE_PATH}")
   list(APPEND CMAKE_MODULE_PATH ${LLVM_DIR})
-  include(ChooseMSVCCRT)
+
+  if (CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    message("Building on Linux")
+  elseif (CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    message("Building on Windows")
+    include(ChooseMSVCCRT)
+  elseif (CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+    message("Building on macOS")
+  else()
+    message(FATAL_ERROR "Unsupported system: ${CMAKE_SYSTEM_NAME}")
+  endif()
 
   include(AddLLVM)
   include(HandleLLVMOptions)

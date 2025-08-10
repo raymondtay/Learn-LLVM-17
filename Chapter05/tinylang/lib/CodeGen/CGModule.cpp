@@ -2,11 +2,13 @@
 #include "tinylang/CodeGen/CGProcedure.h"
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/ErrorHandling.h"
 
 using namespace tinylang;
 
 static llvm::cl::opt<bool>
-    Debug("g", llvm::cl::desc("Generate debug information"),
+    Debug("g",
+          llvm::cl::desc("Generate debug information"),
           llvm::cl::init(false));
 
 CGModule::CGModule(ASTContext &ASTCtx, llvm::Module *M)
@@ -19,8 +21,8 @@ void CGModule::initialize() {
   Int1Ty = llvm::Type::getInt1Ty(getLLVMCtx());
   Int32Ty = llvm::Type::getInt32Ty(getLLVMCtx());
   Int64Ty = llvm::Type::getInt64Ty(getLLVMCtx());
-  Int32Zero =
-      llvm::ConstantInt::get(Int32Ty, 0, /*isSigned*/ true);
+  Int32Zero = llvm::ConstantInt::get(Int32Ty, 0,
+                                     /*isSigned*/ true);
 }
 
 llvm::Type *CGModule::convertType(TypeDeclaration *Ty) {
@@ -33,11 +35,13 @@ llvm::Type *CGModule::convertType(TypeDeclaration *Ty) {
     if (Ty->getName() == "BOOLEAN")
       return Int1Ty;
   } else if (auto *AliasTy =
-                 llvm::dyn_cast<AliasTypeDeclaration>(Ty)) {
+                 llvm::dyn_cast<AliasTypeDeclaration>(
+                     Ty)) {
     llvm::Type *T = convertType(AliasTy->getType());
     return TypeCache[Ty] = T;
   } else if (auto *ArrayTy =
-                 llvm::dyn_cast<ArrayTypeDeclaration>(Ty)) {
+                 llvm::dyn_cast<ArrayTypeDeclaration>(
+                     Ty)) {
     llvm::Type *Component =
         convertType(ArrayTy->getType());
     // The semantic analysis makes sure that the Nums
@@ -54,6 +58,8 @@ llvm::Type *CGModule::convertType(TypeDeclaration *Ty) {
             .getZExtValue();
     llvm::Type *T =
         llvm::ArrayType::get(Component, NumElements);
+    // TypeCache is a mapping between the original
+    // TypeDeclaration(Ty) and the current Type (T).
     return TypeCache[Ty] = T;
   } else if (auto *RecordTy =
                  llvm ::dyn_cast<RecordTypeDeclaration>(
@@ -93,12 +99,18 @@ void CGModule::run(ModuleDeclaration *Mod) {
   for (auto *Decl : Mod->getDecls()) {
     if (auto *Var =
             llvm::dyn_cast<VariableDeclaration>(Decl)) {
+
+      llvm::errs() << "⇒ " << Var->getName()
+                   << " becomes " << mangleName(Var)
+                   << '\n';
+
       // Create global variables
-      llvm::GlobalVariable *V = new llvm::GlobalVariable(
-          *M, convertType(Var->getType()),
-          /*isConstant=*/false,
-          llvm::GlobalValue::PrivateLinkage, nullptr,
-          mangleName(Var));
+      llvm::GlobalVariable *V =
+          new llvm::GlobalVariable(
+              *M, convertType(Var->getType()),
+              /*isConstant=*/false,
+              llvm::GlobalValue::PrivateLinkage,
+              nullptr, mangleName(Var));
       Globals[Var] = V;
     } else if (auto *Proc =
                    llvm::dyn_cast<ProcedureDeclaration>(

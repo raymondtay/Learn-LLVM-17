@@ -5,8 +5,11 @@
 #include "llvm/CodeGen/CommandFlags.h"
 #include "llvm/IR/IRPrintingPasses.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/Module.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/MC/TargetRegistry.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/InitLLVM.h"
 #include "llvm/Support/MemoryBuffer.h"
@@ -26,14 +29,16 @@ static llvm::cl::list<std::string>
 
 static llvm::cl::opt<std::string>
     MTriple("mtriple",
-            llvm::cl::desc("Override target triple for module"));
+            llvm::cl::desc(
+                "Override target triple for module"));
 
-static llvm::cl::opt<bool>
-    EmitLLVM("emit-llvm",
-             llvm::cl::desc("Emit IR code instead of assembler"),
-             llvm::cl::init(false));
+static llvm::cl::opt<bool> EmitLLVM(
+    "emit-llvm",
+    llvm::cl::desc("Emit IR code instead of assembler"),
+    llvm::cl::init(false));
 
-static const char *Head = "tinylang - Tinylang compiler";
+static const char *Head =
+    "tinylang - Tinylang compiler";
 
 void printVersion(llvm::raw_ostream &OS) {
   OS << Head << " " << getTinylangVersion() << "\n";
@@ -43,8 +48,8 @@ void printVersion(llvm::raw_ostream &OS) {
   OS << "  Host CPU: " << CPU << "\n";
   OS << "\n";
   OS.flush();
-  llvm::TargetRegistry::printRegisteredTargetsForVersion(
-      OS);
+  llvm::TargetRegistry::
+      printRegisteredTargetsForVersion(OS);
   exit(EXIT_SUCCESS);
 }
 
@@ -56,23 +61,27 @@ createTargetMachine(const char *Argv0) {
           : llvm::sys::getDefaultTargetTriple());
 
   llvm::TargetOptions TargetOptions =
-      codegen::InitTargetOptionsFromCodeGenFlags(Triple);
+      codegen::InitTargetOptionsFromCodeGenFlags(
+          Triple);
   std::string CPUStr = codegen::getCPUStr();
   std::string FeatureStr = codegen::getFeaturesStr();
 
   std::string Error;
   const llvm::Target *Target =
-      llvm::TargetRegistry::lookupTarget(codegen::getMArch(), Triple,
-                                         Error);
+      llvm::TargetRegistry::lookupTarget(
+          codegen::getMArch(), Triple, Error);
 
   if (!Target) {
-    llvm::WithColor::error(llvm::errs(), Argv0) << Error;
+    llvm::WithColor::error(llvm::errs(), Argv0)
+        << Error;
     return nullptr;
   }
 
   llvm::TargetMachine *TM = Target->createTargetMachine(
-      Triple.getTriple(), CPUStr, FeatureStr, TargetOptions,
-      std::optional<llvm::Reloc::Model>(codegen::getRelocModel()));
+      Triple.getTriple(), CPUStr, FeatureStr,
+      TargetOptions,
+      std::optional<llvm::Reloc::Model>(
+          codegen::getRelocModel()));
   return TM;
 }
 
@@ -84,19 +93,19 @@ bool emit(StringRef Argv0, llvm::Module *M,
   if (InputFilename == "-") {
     OutputFilename = "-";
   } else {
-    if (InputFilename.endswith(".mod") ||
-        InputFilename.endswith(".mod"))
+    if (InputFilename.ends_with(".mod") ||
+        InputFilename.ends_with(".mod"))
       OutputFilename = InputFilename.drop_back(4).str();
     else
       OutputFilename = InputFilename.str();
     switch (FileType) {
-    case CGFT_AssemblyFile:
+    case llvm::CodeGenFileType::AssemblyFile:
       OutputFilename.append(EmitLLVM ? ".ll" : ".s");
       break;
-    case CGFT_ObjectFile:
+    case llvm::CodeGenFileType::ObjectFile:
       OutputFilename.append(".o");
       break;
-    case CGFT_Null:
+    default:
       OutputFilename.append(".null");
       break;
     }
@@ -105,19 +114,31 @@ bool emit(StringRef Argv0, llvm::Module *M,
   // Open the file.
   std::error_code EC;
   sys::fs::OpenFlags OpenFlags = sys::fs::OF_None;
-  if (FileType == CGFT_AssemblyFile)
+  if (FileType == llvm::CodeGenFileType::AssemblyFile)
     OpenFlags |= sys::fs::OF_Text;
   auto Out = std::make_unique<llvm::ToolOutputFile>(
       OutputFilename, EC, OpenFlags);
   if (EC) {
-    WithColor::error(llvm::errs(), Argv0) << EC.message() << '\n';
+    WithColor::error(llvm::errs(), Argv0)
+        << EC.message() << '\n';
     return false;
   }
 
-  if (FileType == CGFT_AssemblyFile && EmitLLVM) {
+  if (FileType == llvm::CodeGenFileType::AssemblyFile &&
+      EmitLLVM) {
     M->print(Out->os(), nullptr);
   } else {
     legacy::PassManager PM;
+
+    // Print out the IR
+    M->print(llvm::errs(), nullptr);
+
+    // Verify the module before passing to the
+    // PassManager
+    if (llvm::verifyModule(*M, &llvm::errs())) {
+      llvm::errs() << "Invalid Module, exiting\n";
+      abort();
+    }
     if (TM->addPassesToEmitFile(PM, Out->os(), nullptr,
                                 FileType)) {
       WithColor::error()
@@ -142,21 +163,24 @@ int main(int Argc, const char **Argv) {
   llvm::cl::ParseCommandLineOptions(Argc, Argv, Head);
 
   if (codegen::getMCPU() == "help" ||
-      std::any_of(codegen::getMAttrs().begin(), codegen::getMAttrs().end(),
+      std::any_of(codegen::getMAttrs().begin(),
+                  codegen::getMAttrs().end(),
                   [](const std::string &a) {
                     return a == "help";
                   })) {
-    auto Triple = llvm::Triple(LLVM_DEFAULT_TARGET_TRIPLE);
+    auto Triple =
+        llvm::Triple(LLVM_DEFAULT_TARGET_TRIPLE);
     std::string ErrMsg;
-    if (auto target = llvm::TargetRegistry::lookupTarget(
-            Triple.getTriple(), ErrMsg)) {
+    if (auto target =
+            llvm::TargetRegistry::lookupTarget(
+                Triple.getTriple(), ErrMsg)) {
       llvm::errs() << "Targeting " << target->getName()
                    << ". ";
-      // this prints the available CPUs and features of the
-      // target to stderr...
-      target->createMCSubtargetInfo(Triple.getTriple(),
-                                    codegen::getCPUStr(),
-                                    codegen::getFeaturesStr());
+      // this prints the available CPUs and features of
+      // the target to stderr...
+      target->createMCSubtargetInfo(
+          Triple.getTriple(), codegen::getCPUStr(),
+          codegen::getFeaturesStr());
     } else {
       llvm::errs() << ErrMsg << "\n";
       exit(EXIT_FAILURE);
@@ -164,7 +188,8 @@ int main(int Argc, const char **Argv) {
     exit(EXIT_SUCCESS);
   }
 
-  llvm::TargetMachine *TM = createTargetMachine(Argv[0]);
+  llvm::TargetMachine *TM =
+      createTargetMachine(Argv[0]);
   if (!TM)
     exit(EXIT_FAILURE);
 
@@ -195,7 +220,8 @@ int main(int Argc, const char **Argv) {
       llvm::LLVMContext Ctx;
       if (CodeGenerator *CG =
               CodeGenerator::create(Ctx, ASTCtx, TM)) {
-        std::unique_ptr<llvm::Module> M = CG->run(Mod, F);
+        std::unique_ptr<llvm::Module> M =
+            CG->run(Mod, F);
         if (!emit(Argv[0], M.get(), TM, F)) {
           llvm::WithColor::error(errs(), Argv[0])
               << "Error writing output\n";

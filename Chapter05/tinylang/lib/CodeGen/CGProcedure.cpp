@@ -5,14 +5,15 @@
 
 using namespace tinylang;
 
-void CGProcedure::writeLocalVariable(llvm::BasicBlock *BB,
-                                     Decl *Decl,
-                                     llvm::Value *Val) {
+void CGProcedure::writeLocalVariable(
+    llvm::BasicBlock *BB, Decl *Decl,
+    llvm::Value *Val) {
   assert(BB && "Basic block is nullptr");
   assert(
       (llvm::isa<VariableDeclaration>(Decl) ||
        llvm::isa<FormalParameterDeclaration>(Decl)) &&
-      "Declaration must be variable or formal parameter");
+      "Declaration must be variable or formal "
+      "parameter");
   assert(Val && "Value is nullptr");
   CurrentDef[BB].Defs[Decl] = Val;
 }
@@ -24,7 +25,8 @@ CGProcedure::readLocalVariable(llvm::BasicBlock *BB,
   assert(
       (llvm::isa<VariableDeclaration>(Decl) ||
        llvm::isa<FormalParameterDeclaration>(Decl)) &&
-      "Declaration must be variable or formal parameter");
+      "Declaration must be variable or formal "
+      "parameter");
   auto Val = CurrentDef[BB].Defs.find(Decl);
   if (Val != CurrentDef[BB].Defs.end())
     return Val->second;
@@ -39,7 +41,8 @@ llvm::Value *CGProcedure::readLocalVariableRecursive(
     llvm::PHINode *Phi = addEmptyPhi(BB, Decl);
     CurrentDef[BB].IncompletePhis[Phi] = Decl;
     Val = Phi;
-  } else if (auto *PredBB = BB->getSinglePredecessor()) {
+  } else if (auto *PredBB =
+                 BB->getSinglePredecessor()) {
     // Only one predecessor.
     Val = readLocalVariable(PredBB, Decl);
   } else {
@@ -54,16 +57,19 @@ llvm::Value *CGProcedure::readLocalVariableRecursive(
 }
 
 llvm::PHINode *
-CGProcedure::addEmptyPhi(llvm::BasicBlock *BB, Decl *Decl) {
+CGProcedure::addEmptyPhi(llvm::BasicBlock *BB,
+                         Decl *Decl) {
   return BB->empty()
-             ? llvm::PHINode::Create(mapType(Decl), 0, "",
-                                     BB)
-             : llvm::PHINode::Create(mapType(Decl), 0, "",
-                                     &BB->front());
+             ? llvm::PHINode::Create(mapType(Decl), 0,
+                                     "", BB)
+             : llvm::PHINode::Create(mapType(Decl), 0,
+                                     "", &BB->front());
 }
 
-llvm::Value *CGProcedure::addPhiOperands(
-    llvm::BasicBlock *BB, Decl *Decl, llvm::PHINode *Phi) {
+llvm::Value *
+CGProcedure::addPhiOperands(llvm::BasicBlock *BB,
+                            Decl *Decl,
+                            llvm::PHINode *Phi) {
   for (auto I = llvm::pred_begin(BB),
             E = llvm::pred_end(BB);
        I != E; ++I) {
@@ -72,7 +78,8 @@ llvm::Value *CGProcedure::addPhiOperands(
   return optimizePhi(Phi);
 }
 
-llvm::Value *CGProcedure::optimizePhi(llvm::PHINode *Phi) {
+llvm::Value *
+CGProcedure::optimizePhi(llvm::PHINode *Phi) {
   llvm::Value *Same = nullptr;
   for (llvm::Value *V : Phi->incoming_values()) {
     if (V == Same || V == Phi)
@@ -109,8 +116,10 @@ void CGProcedure::sealBlock(llvm::BasicBlock *BB) {
 }
 
 void CGProcedure::writeVariable(llvm::BasicBlock *BB,
-                                Decl *D, llvm::Value *Val) {
-  if (auto *V = llvm::dyn_cast<VariableDeclaration>(D)) {
+                                Decl *D,
+                                llvm::Value *Val) {
+  if (auto *V =
+          llvm::dyn_cast<VariableDeclaration>(D)) {
     if (V->getEnclosingDecl() == Proc)
       writeLocalVariable(BB, D, Val);
     else if (V->getEnclosingDecl() ==
@@ -119,9 +128,8 @@ void CGProcedure::writeVariable(llvm::BasicBlock *BB,
     } else
       llvm::report_fatal_error(
           "Nested procedures not yet supported");
-  } else if (auto *FP =
-                 llvm::dyn_cast<FormalParameterDeclaration>(
-                     D)) {
+  } else if (auto *FP = llvm::dyn_cast<
+                 FormalParameterDeclaration>(D)) {
     if (FP->isVar()) {
       Builder.CreateStore(Val, FormalParams[FP]);
     } else
@@ -130,10 +138,11 @@ void CGProcedure::writeVariable(llvm::BasicBlock *BB,
     llvm::report_fatal_error("Unsupported declaration");
 }
 
-llvm::Value *CGProcedure::readVariable(llvm::BasicBlock *BB,
-                                       Decl *D,
-                                       bool LoadVal) {
-  if (auto *V = llvm::dyn_cast<VariableDeclaration>(D)) {
+llvm::Value *
+CGProcedure::readVariable(llvm::BasicBlock *BB, Decl *D,
+                          bool LoadVal) {
+  if (auto *V =
+          llvm::dyn_cast<VariableDeclaration>(D)) {
     if (V->getEnclosingDecl() == Proc)
       return readLocalVariable(BB, D);
     else if (V->getEnclosingDecl() ==
@@ -145,9 +154,8 @@ llvm::Value *CGProcedure::readVariable(llvm::BasicBlock *BB,
     } else
       llvm::report_fatal_error(
           "Nested procedures not yet supported");
-  } else if (auto *FP =
-                 llvm::dyn_cast<FormalParameterDeclaration>(
-                     D)) {
+  } else if (auto *FP = llvm::dyn_cast<
+                 FormalParameterDeclaration>(D)) {
     if (FP->isVar()) {
       if (!LoadVal)
         return FormalParams[FP];
@@ -161,16 +169,19 @@ llvm::Value *CGProcedure::readVariable(llvm::BasicBlock *BB,
 }
 
 llvm::Type *CGProcedure::mapType(Decl *Decl) {
-  if (auto *FP = llvm::dyn_cast<FormalParameterDeclaration>(
-          Decl)) {
+  if (auto *FP =
+          llvm::dyn_cast<FormalParameterDeclaration>(
+              Decl)) {
     llvm::Type *Ty = CGM.convertType(FP->getType());
     if (FP->isVar())
       Ty = Ty->getPointerTo();
     return Ty;
   }
-  if (auto *V = llvm::dyn_cast<VariableDeclaration>(Decl))
+  if (auto *V =
+          llvm::dyn_cast<VariableDeclaration>(Decl))
     return CGM.convertType(V->getType());
-  return CGM.convertType(llvm::cast<TypeDeclaration>(Decl));
+  return CGM.convertType(
+      llvm::cast<TypeDeclaration>(Decl));
 }
 
 llvm::FunctionType *CGProcedure::createFunctionType(
@@ -197,16 +208,18 @@ CGProcedure::createFunction(ProcedureDeclaration *Proc,
       CGM.mangleName(Proc), CGM.getModule());
   // Give parameters a name.
   size_t Idx = 0;
-  for (auto I = Fn->arg_begin(), E = Fn->arg_end(); I != E;
-       ++I, ++Idx) {
+  for (auto I = Fn->arg_begin(), E = Fn->arg_end();
+       I != E; ++I, ++Idx) {
     llvm::Argument *Arg = I;
     FormalParameterDeclaration *FP =
         Proc->getFormalParams()[Idx];
     if (FP->isVar()) {
       llvm::AttrBuilder Attr(Fn->getContext());
       llvm::TypeSize Sz =
-          CGM.getModule()->getDataLayout().getTypeStoreSize(
-              CGM.convertType(FP->getType()));
+          CGM.getModule()
+              ->getDataLayout()
+              .getTypeStoreSize(
+                  CGM.convertType(FP->getType()));
       Attr.addDereferenceableAttr(Sz);
       Attr.addAttribute(llvm::Attribute::NoCapture);
       Arg->addAttrs(Attr);
@@ -290,18 +303,21 @@ CGProcedure::emitPrefixExpr(PrefixExpression *E) {
 }
 
 llvm::Value *CGProcedure::emitExpr(Expr *E) {
-  if (auto *Infix = llvm::dyn_cast<InfixExpression>(E)) {
+  if (auto *Infix =
+          llvm::dyn_cast<InfixExpression>(E)) {
     return emitInfixExpr(Infix);
   } else if (auto *Prefix =
                  llvm::dyn_cast<PrefixExpression>(E)) {
     return emitPrefixExpr(Prefix);
-  } else if (auto *Var = llvm::dyn_cast<Designator>(E)) {
+  } else if (auto *Var =
+                 llvm::dyn_cast<Designator>(E)) {
     auto *Decl = Var->getDecl();
     llvm::Value *Val = readVariable(Curr, Decl);
     // With more languages features in place, here you
     // need to add array and record support.
     auto &Selectors = Var->getSelectors();
-    for (auto I = Selectors.begin(), E = Selectors.end();
+    for (auto I = Selectors.begin(),
+              E = Selectors.end();
          I != E;
          /* no increment */) {
       if (auto *IdxSel =
@@ -310,16 +326,18 @@ llvm::Value *CGProcedure::emitExpr(Expr *E) {
         while (I != E) {
           if (auto *Sel =
                   llvm::dyn_cast<IndexSelector>(*I)) {
-            IdxList.push_back(emitExpr(Sel->getIndex()));
+            IdxList.push_back(
+                emitExpr(Sel->getIndex()));
             ++I;
           } else
             break;
         }
-        Val = Builder.CreateInBoundsGEP(Val->getType(), Val, IdxList);
-        Val = Builder.CreateLoad(
-            Val->getType(), Val);
+        Val = Builder.CreateInBoundsGEP(Val->getType(),
+                                        Val, IdxList);
+        Val = Builder.CreateLoad(Val->getType(), Val);
       } else if (auto *FieldSel =
-                     llvm::dyn_cast<FieldSelector>(*I)) {
+                     llvm::dyn_cast<FieldSelector>(
+                         *I)) {
         llvm::SmallVector<llvm::Value *, 4> IdxList;
         while (I != E) {
           if (auto *Sel =
@@ -331,17 +349,16 @@ llvm::Value *CGProcedure::emitExpr(Expr *E) {
           } else
             break;
         }
-        Val = Builder.CreateInBoundsGEP(Val->getType(), Val, IdxList);
-        Val = Builder.CreateLoad(
-            Val->getType(), Val);
-      } else if (auto *DerefSel =
-                     llvm::dyn_cast<DereferenceSelector>(
-                         *I)) {
-        Val = Builder.CreateLoad(
-            Val->getType(), Val);
+        Val = Builder.CreateInBoundsGEP(Val->getType(),
+                                        Val, IdxList);
+        Val = Builder.CreateLoad(Val->getType(), Val);
+      } else if (auto *DerefSel = llvm::dyn_cast<
+                     DereferenceSelector>(*I)) {
+        Val = Builder.CreateLoad(Val->getType(), Val);
         ++I;
       } else {
-        llvm::report_fatal_error("Unsupported selector");
+        llvm::report_fatal_error(
+            "Unsupported selector");
       }
     }
 
@@ -374,13 +391,15 @@ void CGProcedure::emitStmt(AssignmentStatement *Stmt) {
         llvm::ConstantInt::get(CGM.Int32Ty, 0));
     auto *Base =
         readVariable(Curr, Desig->getDecl(), false);
-    for (auto I = Selectors.begin(), E = Selectors.end();
+    for (auto I = Selectors.begin(),
+              E = Selectors.end();
          I != E; ++I) {
       if (auto *IdxSel =
               llvm::dyn_cast<IndexSelector>(*I)) {
         IdxList.push_back(emitExpr(IdxSel->getIndex()));
       } else if (auto *FieldSel =
-                     llvm::dyn_cast<FieldSelector>(*I)) {
+                     llvm::dyn_cast<FieldSelector>(
+                         *I)) {
         llvm::Value *V = llvm::ConstantInt::get(
             CGM.Int32Ty, FieldSel->getIndex());
         IdxList.push_back(V);
@@ -400,7 +419,8 @@ void CGProcedure::emitStmt(AssignmentStatement *Stmt) {
   }
 }
 
-void CGProcedure::emitStmt(ProcedureCallStatement *Stmt) {
+void CGProcedure::emitStmt(
+    ProcedureCallStatement *Stmt) {
   llvm::report_fatal_error("not implemented");
 }
 
@@ -480,14 +500,18 @@ void CGProcedure::emitStmt(ReturnStatement *Stmt) {
 
 void CGProcedure::emit(const StmtList &Stmts) {
   for (auto *S : Stmts) {
-    if (auto *Stmt = llvm::dyn_cast<AssignmentStatement>(S))
+    if (auto *Stmt =
+            llvm::dyn_cast<AssignmentStatement>(S))
       emitStmt(Stmt);
     else if (auto *Stmt =
-                 llvm::dyn_cast<ProcedureCallStatement>(S))
+                 llvm::dyn_cast<ProcedureCallStatement>(
+                     S))
       emitStmt(Stmt);
-    else if (auto *Stmt = llvm::dyn_cast<IfStatement>(S))
+    else if (auto *Stmt =
+                 llvm::dyn_cast<IfStatement>(S))
       emitStmt(Stmt);
-    else if (auto *Stmt = llvm::dyn_cast<WhileStatement>(S))
+    else if (auto *Stmt =
+                 llvm::dyn_cast<WhileStatement>(S))
       emitStmt(Stmt);
     else if (auto *Stmt =
                  llvm::dyn_cast<ReturnStatement>(S))
@@ -506,8 +530,8 @@ void CGProcedure::run(ProcedureDeclaration *Proc) {
   setCurr(BB);
 
   size_t Idx = 0;
-  for (auto I = Fn->arg_begin(), E = Fn->arg_end(); I != E;
-       ++I, ++Idx) {
+  for (auto I = Fn->arg_begin(), E = Fn->arg_end();
+       I != E; ++I, ++Idx) {
     llvm::Argument *Arg = I;
     FormalParameterDeclaration *FP =
         Proc->getFormalParams()[Idx];
@@ -523,6 +547,11 @@ void CGProcedure::run(ProcedureDeclaration *Proc) {
       llvm::Type *Ty = mapType(Var);
       if (Ty->isAggregateType()) {
         llvm::Value *Val = Builder.CreateAlloca(Ty);
+
+        // The following method requires a BasicBlock
+        // (Curr), a VariableDeclaration (Var), and an
+        // llvm::value (Value)
+        //
         writeLocalVariable(Curr, Var, Val);
       }
     }
